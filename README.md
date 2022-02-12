@@ -12,5 +12,7 @@ https://github.com/ingowald
 
 https://www.cs.ucdavis.edu/~ma/ECS275/OptiX_lecture.pdf
 
+https://github.com/nvpro-samples/optix_advanced_samples
+
 
 
