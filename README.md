@@ -4,5 +4,7 @@ Compiling without CMake is the same as compiling normal CUDA code except that th
 
 https://github.com/torchling/optix
 
+https://owl-project.github.io/
+
 
 
