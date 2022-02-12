@@ -8,5 +8,7 @@ https://owl-project.github.io/
 
 https://developer.nvidia.com/blog/how-to-get-started-with-optix-7/
 
+https://github.com/ingowald
+
 
 
