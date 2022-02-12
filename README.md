@@ -10,5 +10,7 @@ https://developer.nvidia.com/blog/how-to-get-started-with-optix-7/
 
 https://github.com/ingowald
 
+https://www.cs.ucdavis.edu/~ma/ECS275/OptiX_lecture.pdf
+
 
 
