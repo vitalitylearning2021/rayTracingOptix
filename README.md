@@ -79,3 +79,5 @@ extern "C" void optixAssert(OptixResult res)
     }                                                                 
 }
 ```
+
+They emit an error and the program stops if the execution of the decorated function is unsuccessful.
