@@ -21,3 +21,33 @@ Aggiungere cuda.lib al linker
 Compilare in modalità release
 
 INTEROPERABILITY
+
+## Getting started with OptiX
+
+The core OptiX 7 API is header only. The include directory contains everything needed to access the OptiX API core functions. The OptiX 7 headers along with the CUDA toolkit is everything needed to develop GPU accelerated ray tracing algorithms with OptiX 7. To account for the OptiX include directory under Visual Studio, add `C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include` to the VC++ include directories under `Configuration Properties`.
+
+## Optix initializaion
+
+In this very simple example, how initializing OptiX is shown. The core of the example is the `initOptix()` function reported below:
+
+``` c++
+void initOptix() {
+
+    try {
+        std::cout << "Initializing Optix..." << std::endl;
+
+        gpuErrchk(cudaFree(0));
+        int numDevices;
+        gpuErrchk(cudaGetDeviceCount(&numDevices));
+        if (numDevices == 0) throw std::runtime_error("No CUDA capable devices found!");
+        std::cout << "Found " << numDevices << " CUDA devices" << std::endl;
+
+        optixAssert(optixInit());
+
+        std::cout << "Optix successfully initialized." << std::endl;
+    }
+    catch (std::runtime_error& e) {
+        std::cout << "FATAL ERROR: " << e.what() << std::endl;
+        exit(1);
+    }
+}```
