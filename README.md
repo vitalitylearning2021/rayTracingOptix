@@ -19,3 +19,5 @@ Directory di inclusione: aggiungere C:\ProgramData\NVIDIA Corporation\OptiX SDK 
 Aggiungere cuda.lib al linker
 
 Compilare in modalità release
+
+INTEROPERABILITY
