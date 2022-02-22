@@ -51,3 +51,30 @@ void initOptix() {
         exit(1);
     }
 }```
+
+Before initializing OptiX, the presence of a GPU is checked by the `cudaGetDeviceCount()` function. If no GPU is found, an error message is emitted and the program stops.
+The actual function initializing OptiX is `optixInit()`. The decorating functions `gpuErrchk()` and `optixAssert()` are error checking functions reported below, respectively:
+
+``` c++
+void gpuAssert(cudaError_t code, const char* file, int line, bool abort = true)
+{
+	if (code != cudaSuccess)
+	{
+		fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+		if (abort) { exit(code); }
+	}
+}
+
+extern "C" void gpuErrchk(cudaError_t ans) { gpuAssert((ans), __FILE__, __LINE__); }
+```
+
+``` c++
+extern "C" void optixAssert(OptixResult res)
+{
+    if (res != OPTIX_SUCCESS)                                          
+    {                                                                 
+        fprintf(stderr, "Optix call failed with code %d (line %d)\n", res, __LINE__); 
+        exit(2);                                                      
+    }                                                                 
+}
+```
