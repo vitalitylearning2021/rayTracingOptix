@@ -26,7 +26,9 @@ INTEROPERABILITY
 
 The core OptiX 7 API is header only. The include directory contains everything needed to access the OptiX API core functions. The OptiX 7 headers along with the CUDA toolkit is everything needed to develop GPU accelerated ray tracing algorithms with OptiX 7. To account for the OptiX include directory under Visual Studio, add `C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include` to the VC++ include directories under `Configuration Properties`.
 
-## Optix initializaion
+OptiX consente il tracciamento dei raggi in maniera particolarmente efficiente ed efficace. Il motore di tracciamento di OptiX è basato sull'uso della Boundary Volume Hierarchy (BVH) data structure [RIF] accelerata su GPU e relieves the User da una complicata implementazione. Lo User deve semplicemnte specificare, attraverso la scrittura di appositi CUDA kernel, quali sono le operazioni da eseguire per la generazione dei raggi, nel caso di intersezione dei raggi con primitive, nel caso di miss, cioè nel caso in cui i raggi non intersechino primitive etc.
+
+## OptiX initializaion
 
 In this very simple example, how initializing OptiX is shown. The core of the example is the `initOptix()` function reported below:
 
@@ -81,3 +83,11 @@ extern "C" void optixAssert(OptixResult res)
 ```
 
 They emit an error and the program stops if the execution of the decorated function is unsuccessful.
+
+## Creating the OptiX pipeline and generating the rays
+
+
+
+
+
+## CUDA interoperability
