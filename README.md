@@ -92,23 +92,25 @@ They emit an error and the program stops if the execution of the decorated funct
 
 ## Creating the OptiX pipeline and generating the rays
 
+Lo scopo di questo esempio è illustrare esclusivamente la generazione dei raggi. Non ci sono oggetti da intersecare e l'immagine è fictitiously costruita direttamente durante la fase di ray launching. 
+
 La OptiX pipeline è gestita attraverso la `renderer` class che espone tre metodi pubblici:
 
 ``` c++
-    public:
-        // --- Constructor
-        renderer();
+public:
+    // --- Constructor
+    renderer();
 
-        // --- Render one frame
-        void render();
+    // --- Render one frame
+    void render();
 
-        // --- Resize buffer
-        void resize(const int2& newSize);
+    // --- Resize buffer
+    void resize(const int2& newSize);
 
-        thrust::device_vector<uint32_t>             d_colorBuffer;
+    thrust::device_vector<uint32_t>  d_colorBuffer;
 ```
 
-
+ossia il costruttore `renderer()`, il metodo `render()` che materialmente costruisce l'immagine e il metodo `resize()` che effettua il resizing del `d_colorBuffer` gestito, come detto, dalla `thrust` library.
 
 
 ## CUDA interoperability
