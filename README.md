@@ -22,6 +22,12 @@ Compilare in modalità release
 
 INTEROPERABILITY
 
+Gli esempi illustrati sono modellati a partire dal corso tenuto da Ingo Wald al SIGGRAPH Couse 2019/2020 con qualche variante:
+
+  - il codice è organizzato in modo da minimizzare le dipendenze esterne;
+  - la `thrust` library è utilizzata come container al posto del `CUDABuffer`;
+  - the CUDA-OpenGL interoperability è utilizzata per la visualizzazione delle rendered images;
+
 ## Getting started with OptiX
 
 The core OptiX 7 API is header only. The include directory contains everything needed to access the OptiX API core functions. The OptiX 7 headers along with the CUDA toolkit is everything needed to develop GPU accelerated ray tracing algorithms with OptiX 7. To account for the OptiX include directory under Visual Studio, add `C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include` to the VC++ include directories under `Configuration Properties`.
@@ -86,6 +92,21 @@ They emit an error and the program stops if the execution of the decorated funct
 
 ## Creating the OptiX pipeline and generating the rays
 
+La OptiX pipeline è gestita attraverso la `renderer` class che espone tre metodi pubblici:
+
+``` c++
+    public:
+        // --- Constructor
+        renderer();
+
+        // --- Render one frame
+        void render();
+
+        // --- Resize buffer
+        void resize(const int2& newSize);
+
+        thrust::device_vector<uint32_t>             d_colorBuffer;
+```
 
 
 
