@@ -30,9 +30,11 @@ Gli esempi illustrati sono modellati a partire dal corso tenuto da Ingo Wald al 
 
 ## Getting started with OptiX
 
+[AGGIUNGERE OPTIX PROGRAMMING GUIDE]
+
 The core OptiX 7 API is header only. The include directory contains everything needed to access the OptiX API core functions. The OptiX 7 headers along with the CUDA toolkit is everything needed to develop GPU accelerated ray tracing algorithms with OptiX 7. To account for the OptiX include directory under Visual Studio, add `C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.2.0\include` to the VC++ include directories under `Configuration Properties`.
 
-OptiX consente il tracciamento dei raggi in maniera particolarmente efficiente ed efficace. Il motore di tracciamento di OptiX è basato sull'uso della Boundary Volume Hierarchy (BVH) data structure [RIF] accelerata su GPU e relieves the User da una complicata implementazione. Lo User deve semplicemnte specificare, attraverso la scrittura di appositi CUDA kernel, quali sono le operazioni da eseguire per la generazione dei raggi, nel caso di intersezione dei raggi con primitive, nel caso di miss, cioè nel caso in cui i raggi non intersechino primitive etc.
+OptiX consente il tracciamento dei raggi in maniera particolarmente efficiente ed efficace. Il motore di tracciamento di OptiX è basato sull'uso della Boundary Volume Hierarchy (BVH) data structure [RIF] accelerata su GPU e relieves the User da una complicata implementazione thereof. Lo User deve semplicemnte specificare, attraverso la scrittura di appositi CUDA kernel, quali sono le operazioni da eseguire per la generazione dei raggi, nel caso di intersezione dei raggi con primitive, nel caso di miss, cioè nel caso in cui i raggi non intersechino primitive etc.
 
 ## OptiX initializaion
 
@@ -139,7 +141,11 @@ renderer::renderer() {
 
 `h_launchParams` and `d_launchParams` sono un `thrust` `host_vector` and `device_vector` usati per passare alla GPU informazioni utili al rendering, come sarà chiaro tra breve.
 
+### Initialization
+
 Il metodo `initOptix()` effettua l'OptiX initialization, come già fatto nell'esempio precedente, e non verrà ulteriormente commentato.
+
+### Context creation
 
 On the other side, il metodo `createContext()` crea l'OptiX context nel seguente modo:
 
@@ -163,6 +169,44 @@ In altre parole, in questo esempio si considera a single-GPU running e l'esecuzi
 
 Successivamente, tramite la primitiva `cuCtxGetCurrent` del CUDA driver, il CUDA context viene immagazzinato all'interno della variabile `cudaContext`. The CUDA context, indeed, holds all the management data to control and use the device. For instance, it holds the list of allocated memory, the loaded modules that contain device code, the mapping between CPU and GPU memory for zero copy, etc. Una volta fatto questo, è possibile agganciare l'OptiX context `optixContext` al CUDA context `cudaContext` tramite la primitiva `optixDeviceContextCreate`. Infine, l'OptiX context è agganciata ad una callback function to communicate various messages tramite la primitiva `optixDeviceContextSetLogCallback`.
 
+### Module creation
 
+Il metodo `createModule()`, riportato di seguito, specifica le informazione necessarie alla compilazione dei kernel che rappresentano le operazioni da effettuare su GPU per la generazione dei raggi, la loro riflessione, rifrazione etc., effettua la compilazione di tali kernel e li associa all'OptiX context. 
+
+``` c++
+void renderer::createModule() {
+
+    moduleCompileOptions.maxRegisterCount					= 50;
+    moduleCompileOptions.optLevel						= OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
+    moduleCompileOptions.debugLevel						= OPTIX_COMPILE_DEBUG_LEVEL_NONE;
+
+    pipelineCompileOptions = {};
+    pipelineCompileOptions.traversableGraphFlags				= OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+    pipelineCompileOptions.usesMotionBlur					= false;
+    pipelineCompileOptions.numPayloadValues					= 2;
+    pipelineCompileOptions.numAttributeValues					= 2;
+    pipelineCompileOptions.exceptionFlags					= OPTIX_EXCEPTION_FLAG_NONE;
+    pipelineCompileOptions.pipelineLaunchParamsVariableName 			= "optixLaunchParams";
+
+    pipelineLinkOptions.maxTraceDepth						= 2;
+
+    const std::string nvccCommand = NVCC_COMMAND;;
+    system(nvccCommand.c_str());
+    std::ifstream input(INPUT_PTX);
+    std::stringstream ptxCode;
+    while (input >> ptxCode.rdbuf());
+    const std::string ptxCode2 = ptxCode.str();
+
+    char log[2048];
+    size_t sizeof_log = sizeof(log);
+    optixAssert(optixModuleCreateFromPTX(optixContext, &moduleCompileOptions, &pipelineCompileOptions,
+		ptxCode2.c_str(), ptxCode2.size(), log, &sizeof_log, &module));
+    if (sizeof_log > 1) PRINT(log);
+}
+```
+
+`moduleCompileOptions` consente di set informazioni sulla compilazione dei kernel, mentre `pipelineCompileOptions` consente di set informazioni sulla compilazione del motore di tracciamento dei raggi interno ad OptiX.
+
+I kernel compilati per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX
 
 ## CUDA interoperability
