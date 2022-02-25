@@ -207,6 +207,10 @@ void renderer::createModule() {
 
 `moduleCompileOptions` consente di set informazioni sulla compilazione dei kernel, mentre `pipelineCompileOptions` consente di set informazioni sulla compilazione del motore di tracciamento dei raggi interno ad OptiX.
 
-I kernel compilati per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX
+I kernel per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX una volta compilati in linguaggio PTX. I kernel CUDA vengono compilati to PTX creando una stringa di comando e utilizzando una chiamata di sistema tramite `system`. Nell'esempio di sopra, la stringa-comando viene specificata tramite `NVCC_COMMAND` definito tramite il pre-processore C++. Il file PTX così generato viene caricato in una `std::string` `ptxCode2`. Anche `INPUT_PTX`, che contiene il nome del file PTX da caricare, è stato definito tramite il pre-processore C++.
+
+
+
+
 
 ## CUDA interoperability
