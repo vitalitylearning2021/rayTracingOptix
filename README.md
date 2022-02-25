@@ -161,7 +161,7 @@ void renderer::createContext()
 
 In altre parole, in questo esempio si considera a single-GPU running e l'esecuzione di OptiX è agganciata alla GPU number `0`. Viene dunque selezionata la GPU number `0` e creato uno stream all'interno del quale dovrà avvenire l'esecuzione delle primitive di OptiX. 
 
-Successivamente, tramite la primitiva `cuCtxGetCurrent` del CUDA driver, il CUDA context viene immagazzinato all'interno della variabile `cudaContext`. The CUDA context, indeed, holds all the management data to control and use the device. For instance, it holds the list of allocated memory, the loaded modules that contain device code, the mapping between CPU and GPU memory for zero copy, etc. Una volta fatto questo, è possibile agganciare l'OptiX context `optixContext` al CUDA context `cudaContext` tramite la primitiva `optixDeviceContextCreate`.
+Successivamente, tramite la primitiva `cuCtxGetCurrent` del CUDA driver, il CUDA context viene immagazzinato all'interno della variabile `cudaContext`. The CUDA context, indeed, holds all the management data to control and use the device. For instance, it holds the list of allocated memory, the loaded modules that contain device code, the mapping between CPU and GPU memory for zero copy, etc. Una volta fatto questo, è possibile agganciare l'OptiX context `optixContext` al CUDA context `cudaContext` tramite la primitiva `optixDeviceContextCreate`. Infine, l'OptiX context è agganciata ad una callback function to communicate various messages tramite la primitiva `optixDeviceContextSetLogCallback`.
 
 
 
