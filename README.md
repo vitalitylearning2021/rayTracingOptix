@@ -112,5 +112,57 @@ public:
 
 ossia il costruttore `renderer()`, il metodo `render()` che materialmente costruisce l'immagine e il metodo `resize()` che effettua il resizing del `d_colorBuffer` gestito, come detto, dalla `thrust` library.
 
+Il costruttore, di seguito riportato, effettua la creazione della OptiX pipeline e della *shader binding table* (SBT).
+
+``` c++
+renderer::renderer() {
+
+   h_launchParams.resize(1);
+   d_launchParams.reserve(1);
+	
+   initOptix();
+
+   createContext();
+
+   createModule();
+
+   createRaygenPrograms();
+
+   createMissPrograms();
+	 
+   createHitgroupPrograms();
+
+   createPipeline();
+
+   buildSBT(); }
+```
+
+`h_launchParams` and `d_launchParams` sono un `thrust` `host_vector` and `device_vector` usati per passare alla GPU informazioni utili al rendering, come sarà chiaro tra breve.
+
+Il metodo `initOptix()` effettua l'OptiX initialization, come già fatto nell'esempio precedente, e non verrà ulteriormente commentato.
+
+On the other side, il metodo `createContext()` crea l'OptiX context nel seguente modo:
+
+``` c++
+void renderer::createContext()
+{
+	const int deviceID = 0;
+	gpuErrchk(cudaSetDevice(deviceID));
+	gpuErrchk(cudaStreamCreate(&stream));
+
+	gpuErrchk(cudaGetDeviceProperties(&deviceProps, deviceID));
+
+	CUresult  cuRes = cuCtxGetCurrent(&cudaContext);
+	if (cuRes != CUDA_SUCCESS) fprintf(stderr, "Error querying current context: error code %d\n", cuRes);
+
+	optixAssert(optixDeviceContextCreate(cudaContext, 0, &optixContext));
+	optixAssert(optixDeviceContextSetLogCallback(optixContext, context_log_cb, nullptr, 4)); }
+```
+
+In altre parole, in questo esempio si considera a single-GPU running e l'esecuzione di OptiX è agganciata alla GPU number `0`. Viene dunque selezionata la GPU number `0` e creato uno stream all'interno del quale dovrà avvenire l'esecuzione delle primitive di OptiX. 
+
+Successivamente, tramite la primitiva `cuCtxGetCurrent` del CUDA driver, il CUDA context viene immagazzinato all'interno della variabile `cudaContext`. The CUDA context, indeed, holds all the management data to control and use the device. For instance, it holds the list of allocated memory, the loaded modules that contain device code, the mapping between CPU and GPU memory for zero copy, etc. Una volta fatto questo, è possibile agganciare l'OptiX context `optixContext` al CUDA context `cudaContext` tramite la primitiva `optixDeviceContextCreate`.
+
+
 
 ## CUDA interoperability
