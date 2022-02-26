@@ -190,9 +190,9 @@ void renderer::createModule() {
 
     pipelineLinkOptions.maxTraceDepth						= 2;
 
-    const std::string nvccCommand = NVCC_COMMAND;;
+    	const std::string nvccCommand = "nvcc C:/Users/angel/source/repos/optixPipelineAndRayGen/optixPipelineAndRayGen/devicePrograms.cu -ptx -allow-unsupported-compiler -I \"C:/ProgramData/NVIDIA Corporation/OptiX SDK 7.2.0/include\"";
     system(nvccCommand.c_str());
-    std::ifstream input(INPUT_PTX);
+    std::ifstream input("C:/Users/angel/source/repos/optixPipelineAndRayGen/optixPipelineAndRayGen/devicePrograms.ptx");
     std::stringstream ptxCode;
     while (input >> ptxCode.rdbuf());
     const std::string ptxCode2 = ptxCode.str();
@@ -207,10 +207,98 @@ void renderer::createModule() {
 
 `moduleCompileOptions` consente di set informazioni sulla compilazione dei kernel, mentre `pipelineCompileOptions` consente di set informazioni sulla compilazione del motore di tracciamento dei raggi interno ad OptiX.
 
-I kernel per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX una volta compilati in linguaggio PTX. I kernel CUDA vengono compilati to PTX creando una stringa di comando e utilizzando una chiamata di sistema tramite `system`. Nell'esempio di sopra, la stringa-comando viene specificata tramite `NVCC_COMMAND` definito tramite il pre-processore C++. Il file PTX così generato viene caricato in una `std::string` `ptxCode2`. Anche `INPUT_PTX`, che contiene il nome del file PTX da caricare, è stato definito tramite il pre-processore C++.
+E' da notare che, tra i campi da settare riguardanti le informazioni di compilazione del motore di ray tracing, vi è anche `pipelineLaunchParamsVariableName` che, nel caso in esame, prende il nome di `"optixLaunchParams"`. `pipelineLaunchParamsVariableName` consente infatti di specificare il nome di una variabile utilizzata per lo scambio dati con i già menzionati User-defined kernels per la gestione dei raggi. Nella fattispecie, `optixLaunchParams` è una variabile di tipo `LaunchParams`, ossia del seguente `struct`:
+
+``` c++
+struct LaunchParams {
+    int       frameID{ 0 };
+    unsigned int *colorBuffer;
+    int2      fbSize; };
+```
+
+Il campo `frameID` di questo `struct` verrà rigidamente fissato a `0` in questo esempio e, di fatto, rimarrà inutilizzato. Al contrario, `colorBuffer` sarà un puntatore all'area dati in cui verrà memorizzata l'immagine generata. Infine, `fbSize` conterrà le dimensioni dell'immagine.
+
+I kernel per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX una volta compilati in linguaggio PTX. I kernel CUDA vengono compilati to PTX creando una stringa di comando e utilizzando una chiamata di sistema tramite `system`. Il file PTX così generato viene caricato in una `std::string` `ptxCode2`. L'associazione dei programmi PTX con le modalità di compilazione dei kernel e del motore di tracciamento dei raggi avviene grazie alla primitiva `optixModuleCreateFromPTX`.
+
+### Crate raygen program
+
+E' ora giunto il momento di associare, ai vari kernel compilati in linguaggio PTX, un significato. Il metodo `createRaygenPrograms()` associa al kernel scritto per la generazione dei raggi il suo significato di generazione dei raggi:
+
+``` c++
+void renderer::createRaygenPrograms() {
+
+	raygenPGs.resize(1);
+
+	OptixProgramGroupOptions pgOptions		= {};
+	OptixProgramGroupDesc pgDesc			= {};
+	pgDesc.kind					= OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+	pgDesc.raygen.module				= module;
+	pgDesc.raygen.entryFunctionName			= "__raygen__renderFrame";
+
+	OptixProgramGroup				raypg;
+	char log[2048];
+	size_t sizeof_log				= sizeof(log);
+	optixAssert(optixProgramGroupCreate(optixContext, &pgDesc, 1, &pgOptions, log, &sizeof_log, &raygenPGs[0]));
+	if (sizeof_log > 1) PRINT(log);
+}
+```
+
+In particolare, il nome del kernel è `__raygen__renderFrame` e questo viene identificato come `OPTIX_PROGRAM_GROUP_KIND_RAYGEN`. 
+
+La `__global__` function `__raygen__renderFrame`, contenuta nel file `devicePrograms.cu`, è di seguito riportata
+
+``` c++
+extern "C" __global__ void __raygen__renderFrame() {
+    
+    if (optixLaunchParams.frameID == 0 && optixGetLaunchIndex().x == 0 && optixGetLaunchIndex().y == 0) {
+            printf("OptiX 7 ray generation program. The image is %ix%i-sized\n",
+                optixLaunchParams.fbSize.x,
+                optixLaunchParams.fbSize.y);
+        }
+
+        const int ix = optixGetLaunchIndex().x;
+        const int iy = optixGetLaunchIndex().y;
+
+        const int r = (ix % 256);
+        const int g = (iy % 256);
+        const int b = ((ix + iy) % 256);
+
+        // convert to 32-bit rgba value (we explicitly set alpha to 0xff
+        // to make stb_image_write happy ...
+        const unsigned int rgba = 0xff000000
+            | (r << 0) | (g << 8) | (b << 16);
+
+        // and write to frame buffer ...
+        const unsigned int fbIndex = ix + iy * optixLaunchParams.fbSize.x;
+        optixLaunchParams.colorBuffer[fbIndex] = rgba;
+    }
+```
+
+`optixGetLaunchIndex().x` and `optixGetLaunchIndex().y` sono sostanzialmente i thread IDs lungo x ed y. Dunque, in accordo al kernel, il solo thread con coordinate `(0,0)` invia un messaggio. Tutti i kernel riempiono poi il pixel ad essi assegnato dell'immagine con un colore dipendente dal loro thread ID.
+
+### Crate miss and hitgroup programs
+
+I metodi `createMissPrograms()` e `createHitgroupPrograms()` operano in maniera del tutto simile a `createRaygenPrograms()` in quanto associano i kernel `__miss__radiance`, `__closesthit__radiance` e `__anyhit__radiance` ai loro significati di operazioni da effettuare in caso di mancata intersezione, di intersezione più vicina o di intersezione generica. Le istruzioni che differenziano `createMissPrograms()` e `createHitgroupPrograms()` e che operano a questo scopo sono le seguenti:
 
 
+``` c++
+pgDesc.kind					= OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+pgDesc.hitgroup.moduleCH			= module;
+pgDesc.hitgroup.entryFunctionNameCH		= "__closesthit__radiance";
+pgDesc.hitgroup.moduleAH			= module;
+pgDesc.hitgroup.entryFunctionNameAH		= "__anyhit__radiance";
+```
 
+Riportiamo di seguito anche i kernel contenuti nel file `devicePrograms.cu`:
 
+``` c++
+extern "C" __global__ void __closesthit__radiance() { }
+
+extern "C" __global__ void __anyhit__radiance() { }
+
+extern "C" __global__ void __miss__radiance() { }
+```
+
+Essi sono vuoti perché nessuna operazione è prevista nel caso di miss o hit.
 
 ## CUDA interoperability
