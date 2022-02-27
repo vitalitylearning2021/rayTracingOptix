@@ -28,6 +28,8 @@ Gli esempi illustrati sono modellati a partire dal corso tenuto da Ingo Wald al 
   - la `thrust` library è utilizzata come container al posto del `CUDABuffer`;
   - the CUDA-OpenGL interoperability è utilizzata per la visualizzazione delle rendered images;
 
+Al contrario di coloro che sono esperti di computer graphics, utilizzeremo un linguaggio meno tecnico e più fisico, in modo che il materiale sia accessibile ad una platea quanto più ampia possibile.
+
 ## Getting started with OptiX
 
 [AGGIUNGERE OPTIX PROGRAMMING GUIDE]
@@ -374,6 +376,52 @@ void renderer::buildSBT() {
 }
 ```
 
+### Rendering
 
+Il metodo che effettua materialmente la creazione dell'immagine (rendering) è il metodo `render()` di seguito riportato.
+
+``` c++
+void renderer::render()
+{
+	if (h_launchParams[0].fbSize.x == 0) return;
+
+	d_launchParams = h_launchParams;
+	h_launchParams[0].frameID++;
+
+	optixAssert(optixLaunch(pipeline, stream, (CUdeviceptr)thrust::raw_pointer_cast(d_launchParams.data()),	d_launchParams.size() * sizeof(LaunchParams),
+				&sbt, h_launchParams[0].fbSize.x, h_launchParams[0].fbSize.y, 1));
+
+	gpuErrchk(cudaDeviceSynchronize());
+}
+```
+
+Esenzialmente, esso si limita a lanciare la primitiva `optixLaunch()`. E' da notare che, tramite tale primitiva, è possibile passare i dati che i kernel (in questo caso, il solo kernel di generazione dei raggi) dovranno utilizzare tramite `d_launchParams`. La primitiva di lancio specifica anche il grigliato di lancio che, in questo caso, è `(h_launchParams[0].fbSize.x, h_launchParams[0].fbSize.y)`.
+
+### Main function
+
+La `main` function di seguito riportata definisce un'istanza della classe `renderer`, fissa le dimensioni dell'immagine e quindi del grigliato di lancio dei kernel coinvolti `(1200, 1024)`, dimensiona in accordo il buffer realizzato con la libreria `thrust`, lancia il metodo di rendering e salva l'immagine in formato `BMP` tramite la funzione `writeBmp()` non riportata qui.
+
+``` c++
+int main() {
+	
+	try {
+		renderer sample;
+		const int2 fbSize = make_int2(1200, 1024);
+		sample.resize(fbSize);
+		std::cout << GREEN << "Execution starts..." << std::endl << WHITE;
+		sample.render();
+		std::cout << GREEN << "Execution ends..." << std::endl << WHITE;
+		thrust::host_vector<uint32_t> pixels = sample.d_colorBuffer;
+		std::string path = IMAGE_PATH;
+		writeBmp(path, fbSize.x, fbSize.y, pixels.data());
+	}
+	catch (std::runtime_error& e) {
+		std::cout << RED << "FATAL ERROR: " << e.what() << std::endl << WHITE;
+		exit(1);
+	}
+
+	return 0;
+}
+```
 
 ## CUDA interoperability
