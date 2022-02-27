@@ -171,7 +171,7 @@ Successivamente, tramite la primitiva `cuCtxGetCurrent` del CUDA driver, il CUDA
 
 ### Module creation
 
-Il metodo `createModule()`, riportato di seguito, specifica le informazione necessarie alla compilazione dei kernel che rappresentano le operazioni da effettuare su GPU per la generazione dei raggi, la loro riflessione, rifrazione etc., effettua la compilazione di tali kernel e li associa all'OptiX context. 
+Il metodo `createModule()`, riportato di seguito, specifica le informazione necessarie alla compilazione dei kernel che rappresentano le operazioni da effettuare su GPU per la generazione dei raggi, la loro riflessione, rifrazione etc., effettua la compilazione di tali kernel e li associa all'OptiX context. Negli altri metodi descritti di sotto, al modulo verranno associati anche i kernel compilati che specificano le operazioni menzionate assegnando loro uno specifico significato tra: generazione dei raggi, ray miss, closest hit, any hit. E' da notare che, in questo semplice esempio, viene gestito un solo modulo, ma OptiX può gestire anche più moduli perché nella scena possono essere presenti materiali differenti, da associare a moduli differenti, per i quali le leggi di riflessione e rifrazione possono essere differenti.
 
 ``` c++
 void renderer::createModule() {
@@ -205,7 +205,7 @@ void renderer::createModule() {
 }
 ```
 
-`moduleCompileOptions` consente di set informazioni sulla compilazione dei kernel, mentre `pipelineCompileOptions` consente di set informazioni sulla compilazione del motore di tracciamento dei raggi interno ad OptiX.
+`moduleCompileOptions` consente di set informazioni sulla compilazione dei kernel, mentre `pipelineCompileOptions` consente di set informazioni sulla compilazione del motore di tracciamento dei raggi interno ad OptiX. The link option `maxTraceDepth` specifies the maximum recursion depth setting for recursive ray tracing, not used here.
 
 E' da notare che, tra i campi da settare riguardanti le informazioni di compilazione del motore di ray tracing, vi è anche `pipelineLaunchParamsVariableName` che, nel caso in esame, prende il nome di `"optixLaunchParams"`. `pipelineLaunchParamsVariableName` consente infatti di specificare il nome di una variabile utilizzata per lo scambio dati con i già menzionati User-defined kernels per la gestione dei raggi. Nella fattispecie, `optixLaunchParams` è una variabile di tipo `LaunchParams`, ossia del seguente `struct`:
 
@@ -220,7 +220,7 @@ Il campo `frameID` di questo `struct` verrà rigidamente fissato a `0` in questo
 
 I kernel per la generazione dei raggi e la loro riflessione/rifrazione vengono associati al modulo OptiX una volta compilati in linguaggio PTX. I kernel CUDA vengono compilati to PTX creando una stringa di comando e utilizzando una chiamata di sistema tramite `system`. Il file PTX così generato viene caricato in una `std::string` `ptxCode2`. L'associazione dei programmi PTX con le modalità di compilazione dei kernel e del motore di tracciamento dei raggi avviene grazie alla primitiva `optixModuleCreateFromPTX`.
 
-### Crate raygen program
+### Raygen program creation
 
 E' ora giunto il momento di associare, ai vari kernel compilati in linguaggio PTX, un significato. Il metodo `createRaygenPrograms()` associa al kernel scritto per la generazione dei raggi il suo significato di generazione dei raggi:
 
@@ -263,12 +263,8 @@ extern "C" __global__ void __raygen__renderFrame() {
         const int g = (iy % 256);
         const int b = ((ix + iy) % 256);
 
-        // convert to 32-bit rgba value (we explicitly set alpha to 0xff
-        // to make stb_image_write happy ...
-        const unsigned int rgba = 0xff000000
-            | (r << 0) | (g << 8) | (b << 16);
+        const unsigned int rgba = 0xff000000 | (r << 0) | (g << 8) | (b << 16);
 
-        // and write to frame buffer ...
         const unsigned int fbIndex = ix + iy * optixLaunchParams.fbSize.x;
         optixLaunchParams.colorBuffer[fbIndex] = rgba;
     }
@@ -276,7 +272,7 @@ extern "C" __global__ void __raygen__renderFrame() {
 
 `optixGetLaunchIndex().x` and `optixGetLaunchIndex().y` sono sostanzialmente i thread IDs lungo x ed y. Dunque, in accordo al kernel, il solo thread con coordinate `(0,0)` invia un messaggio. Tutti i kernel riempiono poi il pixel ad essi assegnato dell'immagine con un colore dipendente dal loro thread ID.
 
-### Crate miss and hitgroup programs
+### Miss and hitgroup programs creation
 
 I metodi `createMissPrograms()` e `createHitgroupPrograms()` operano in maniera del tutto simile a `createRaygenPrograms()` in quanto associano i kernel `__miss__radiance`, `__closesthit__radiance` e `__anyhit__radiance` ai loro significati di operazioni da effettuare in caso di mancata intersezione, di intersezione più vicina o di intersezione generica. Le istruzioni che differenziano `createMissPrograms()` e `createHitgroupPrograms()` e che operano a questo scopo sono le seguenti:
 
@@ -300,5 +296,84 @@ extern "C" __global__ void __miss__radiance() { }
 ```
 
 Essi sono vuoti perché nessuna operazione è prevista nel caso di miss o hit.
+
+### Pipeline creation
+
+Dopo aver associato ciascun kernel al suo modulo corrispondente, tutti i kernel vengono inseriti in una *pipeline* `pipeline` dal metodo `createPipeline()`:
+
+``` c++
+void renderer::createPipeline() {
+
+	thrust::host_vector<OptixProgramGroup> programGroups;
+	for (auto pg : raygenPGs)		programGroups.push_back(pg);
+	for (auto pg : missPGs)			programGroups.push_back(pg);
+	for (auto pg : hitgroupPGs)		programGroups.push_back(pg);
+
+	char log[2048];
+	size_t sizeof_log				= sizeof(log);
+	optixAssert(optixPipelineCreate(optixContext, &pipelineCompileOptions, &pipelineLinkOptions, programGroups.data(),
+									(int)programGroups.size(), log, &sizeof_log, &pipeline));
+	if (sizeof_log > 1) PRINT(log);
+
+	optixAssert(optixPipelineSetStackSize(pipeline, 2 * 1024, 2 * 1024, 2 * 1024, 1));
+	if (sizeof_log > 1) PRINT(log);
+}
+```
+
+L'obiettivo viene raggiunto tramite la primitiva `optixPipelineCreate`. Ancora una volta, per evitare l'uso del `CUDABuffer`, viene sfruttato un `thrust::host_vector`. La primitiva `optixPipelineSetStackSize` fissa infine the stack size for the considered pipeline.
+
+### Shader binding table creation
+
+When a ray hits an object in the scene, the ray tracer needs some way to determine which kernel to call to perform intersection tests, reflections or refractions. The Shader Binding Table (SBT) is a lookup table providing this information. It associates each geometry in the scene with a set of kernel function handles and parameters for these
+functions. Each set of function handles and parameters is referred to as a shader record.
+
+In questo esempio specifico, non vi sono oggetti in quanto ci limitiamo al solo lancio dei raggi. Riportiamo di seguito il metodo `buildSBT()` senza fornire ulteriori dettagli:
+
+``` c++
+void renderer::buildSBT() {
+
+	// --- Raygen records
+	thrust::host_vector<RaygenRecord> raygenRecords;
+	for (int i = 0; i < raygenPGs.size(); i++) {
+		RaygenRecord rec;
+		optixAssert(optixSbtRecordPackHeader(raygenPGs[i], &rec));
+		rec.data = nullptr; /* for now ... */
+		raygenRecords.push_back(rec);
+	}
+	// --- Copy-assignment can also be used, as can thrust::copy
+	raygenRecordsBuffer		= raygenRecords;
+	sbt.raygenRecord		= (CUdeviceptr)thrust::raw_pointer_cast(raygenRecordsBuffer.data());
+
+	// --- Miss records
+	thrust::host_vector<MissRecord> missRecords;
+	for (int i = 0; i < missPGs.size(); i++) {
+		MissRecord rec;
+		optixAssert(optixSbtRecordPackHeader(missPGs[i], &rec));
+		rec.data = nullptr; /* for now ... */
+		missRecords.push_back(rec);
+	}
+	missRecordsBuffer				= missRecords;
+	sbt.missRecordBase				= (CUdeviceptr)thrust::raw_pointer_cast(missRecordsBuffer.data());
+	sbt.missRecordStrideInBytes		= sizeof(MissRecord);
+	sbt.missRecordCount				= (int)missRecords.size();
+
+	// --- Hitgroup records
+	int numObjects = 1;
+	thrust::host_vector<HitgroupRecord> hitgroupRecords;
+	for (int i = 0; i < numObjects; i++) {
+		int objectType = 0;
+		HitgroupRecord rec;
+		optixAssert(optixSbtRecordPackHeader(hitgroupPGs[objectType], &rec));
+		rec.objectID = i;
+		hitgroupRecords.push_back(rec);
+	}
+	hitgroupRecordsBuffer			= hitgroupRecords;
+	sbt.hitgroupRecordBase			= (CUdeviceptr)thrust::raw_pointer_cast(hitgroupRecordsBuffer.data());
+	sbt.hitgroupRecordStrideInBytes = sizeof(HitgroupRecord);
+	sbt.hitgroupRecordCount			= (int)hitgroupRecords.size();
+}
+```
+
+
 
 ## CUDA interoperability
